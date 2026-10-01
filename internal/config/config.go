@@ -5,10 +5,12 @@ import (
 )
 
 type Config struct {
-	MongoURI    string
-	DatabaseName string
-	JWTSecret   string
-	Port        string
+	MongoURI      string
+	DatabaseName  string
+	JWTSecret     string
+	Port          string
+	GeminiAPIKey  string
+	GoogleAPIKey  string
 }
 
 func Load() *Config {
@@ -17,6 +19,8 @@ func Load() *Config {
 		DatabaseName: getEnv("DATABASE_NAME", "kalinga"),
 		JWTSecret:    getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
 		Port:         getEnv("PORT", "8080"),
+		GeminiAPIKey: getEnv("GEMINI_API_KEY", ""),
+		GoogleAPIKey: getEnv("GOOGLE_API_KEY", ""),
 	}
 }
 

@@ -3,19 +3,21 @@ package auth
 import (
 	"context"
 	"errors"
+
+	"github.com/chawadev/kalinga-backend/internal/users"
 )
 
 type Service struct {
-	repo *Repository
+	userRepo *users.Repository
 }
 
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+func NewService(userRepo *users.Repository) *Service {
+	return &Service{userRepo: userRepo}
 }
 
-func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*AuthResponse, error) {
+func (s *Service) Register(ctx context.Context, req *users.RegisterRequest) (*users.AuthResponse, error) {
 	// Check if user already exists
-	existingUser, err := s.repo.FindByEmail(ctx, req.Email)
+	existingUser, err := s.userRepo.FindByEmail(ctx, req.Email)
 	if err == nil && existingUser != nil {
 		return nil, errors.New("user already exists")
 	}
@@ -27,13 +29,13 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*AuthResp
 	}
 
 	// Create user
-	user := &User{
+	user := &users.User{
 		Email:    req.Email,
 		Password: hashedPassword,
 		Name:     req.Name,
 	}
 
-	if err := s.repo.CreateUser(ctx, user); err != nil {
+	if err := s.userRepo.CreateUser(ctx, user); err != nil {
 		return nil, err
 	}
 
@@ -43,14 +45,14 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*AuthResp
 		return nil, err
 	}
 
-	return &AuthResponse{
+	return &users.AuthResponse{
 		Token: token,
 		User:  *user,
 	}, nil
 }
 
-func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, error) {
-	user, err := s.repo.FindByEmail(ctx, req.Email)
+func (s *Service) Login(ctx context.Context, req *users.LoginRequest) (*users.AuthResponse, error) {
+	user, err := s.userRepo.FindByEmail(ctx, req.Email)
 	if err != nil {
 		return nil, errors.New("invalid credentials")
 	}
@@ -64,12 +66,12 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 		return nil, err
 	}
 
-	return &AuthResponse{
+	return &users.AuthResponse{
 		Token: token,
 		User:  *user,
 	}, nil
 }
 
-func (s *Service) GetUser(ctx context.Context, userID string) (*User, error) {
-	return s.repo.FindByID(ctx, userID)
+func (s *Service) GetUser(ctx context.Context, userID string) (*users.User, error) {
+	return s.userRepo.FindByID(ctx, userID)
 }
