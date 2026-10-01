@@ -4,8 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/generative-ai-go/genai"
-	"google.golang.org/api/option"
+	genai "google.golang.org/genai"
 )
 
 type Client struct {
@@ -14,7 +13,10 @@ type Client struct {
 
 func NewClient(apiKey string) (*Client, error) {
 	ctx := context.Background()
-	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey:  apiKey,
+		Backend: genai.BackendGeminiAPI,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Gemini client: %w", err)
 	}
@@ -23,24 +25,19 @@ func NewClient(apiKey string) (*Client, error) {
 }
 
 func (c *Client) Close() error {
-	if c.client != nil {
-		return c.client.Close()
-	}
+	// The new SDK doesn't have a Close method
 	return nil
 }
 
 func (c *Client) GenerateContent(ctx context.Context, model string, prompt string) (string, error) {
-	modelClient := c.client.GenerativeModel(model)
-	modelClient.SetTemperature(0.7)
-
-	resp, err := modelClient.GenerateContent(ctx, genai.Text(prompt))
+	result, err := c.client.Models.GenerateContent(ctx, model, genai.Text(prompt), nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate content: %w", err)
 	}
 
-	if len(resp.Candidates) == 0 {
+	if result == nil {
 		return "", fmt.Errorf("no response generated")
 	}
 
-	return fmt.Sprintf("%v", resp.Candidates[0].Content.Parts[0]), nil
+	return result.Text(), nil
 }

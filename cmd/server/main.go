@@ -3,9 +3,11 @@ package main
 import (
 	"log"
 
+	"github.com/chawadev/kalinga-backend/internal/ai"
 	"github.com/chawadev/kalinga-backend/internal/auth"
 	"github.com/chawadev/kalinga-backend/internal/config"
 	"github.com/chawadev/kalinga-backend/internal/database"
+	"github.com/chawadev/kalinga-backend/internal/handlers"
 	"github.com/chawadev/kalinga-backend/internal/mcp"
 	"github.com/chawadev/kalinga-backend/internal/users"
 	"github.com/gin-gonic/gin"
@@ -38,14 +40,27 @@ func main() {
 	// Initialize services
 	authService := auth.NewService(userRepo)
 
+	// Initialize AI service
+	aiService, err := ai.NewService(cfg)
+	if err != nil {
+		log.Printf("Warning: Failed to initialize AI service: %v", err)
+		aiService = nil
+	}
+	if aiService != nil {
+		defer aiService.Close()
+	}
+
 	// Initialize MCP server
 	mcpServer := mcp.NewServer()
+
+	// Initialize handlers
+	chatHandler := handlers.NewChatHandler(aiService, mcpServer)
 
 	// Setup Gin router
 	router := gin.Default()
 
 	// Setup routes
-	setupRoutes(router, authService, mcpServer)
+	setupRoutes(router, authService, mcpServer, chatHandler)
 
 	log.Printf("Kalinga server listening on http://localhost:%s", cfg.Port)
 
@@ -54,7 +69,7 @@ func main() {
 	}
 }
 
-func setupRoutes(router *gin.Engine, authService *auth.Service, mcpServer *mcp.Server) {
+func setupRoutes(router *gin.Engine, authService *auth.Service, mcpServer *mcp.Server, chatHandler *handlers.ChatHandler) {
 	// CORS middleware
 	router.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
@@ -80,6 +95,9 @@ func setupRoutes(router *gin.Engine, authService *auth.Service, mcpServer *mcp.S
 
 	// MCP endpoint
 	router.POST("/mcp", mcpServer.HandleRequest)
+
+	// Chat endpoint
+	router.POST("/api/chat", chatHandler.Chat)
 
 	// Auth routes (for user authentication)
 	router.POST("/api/auth/register", registerHandler(authService))
