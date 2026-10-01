@@ -2,18 +2,15 @@ package auth
 
 import (
 	"fmt"
-	"os"
 	"time"
 
+	"github.com/chawadev/kalinga-backend/internal/config"
 	"github.com/golang-jwt/jwt/v5"
 )
 
 func getJWTSecret() []byte {
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		secret = "your-secret-key-change-in-production"
-	}
-	return []byte(secret)
+	cfg := config.Load()
+	return []byte(cfg.JWTSecret)
 }
 
 type Claims struct {

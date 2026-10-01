@@ -1,10 +1,9 @@
 package api
 
 import (
-	"net/http"
-
 	"github.com/chawadev/kalinga-backend/internal/auth"
 	"github.com/chawadev/kalinga-backend/internal/handlers"
+	"github.com/gin-gonic/gin"
 )
 
 type Router struct {
@@ -17,24 +16,23 @@ func NewRouter(authService *auth.Service) *Router {
 	}
 }
 
-func (r *Router) SetupRoutes(mux *http.ServeMux) {
-	// Auth routes with CORS
-	mux.HandleFunc("/api/auth/register", corsMiddleware(r.authHandler.Register))
-	mux.HandleFunc("/api/auth/login", corsMiddleware(r.authHandler.Login))
-	mux.HandleFunc("/api/auth/user", corsMiddleware(r.authHandler.GetUser))
-}
+func (r *Router) SetupRoutes(router *gin.Engine) {
+	// CORS middleware
+	router.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-ID")
 
-func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-ID")
-
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(200)
 			return
 		}
 
-		next(w, r)
-	}
+		c.Next()
+	})
+
+	// Auth routes
+	router.POST("/api/auth/register", r.authHandler.Register)
+	router.POST("/api/auth/login", r.authHandler.Login)
+	router.GET("/api/auth/user", r.authHandler.GetUser)
 }

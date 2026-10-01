@@ -7,18 +7,17 @@ import (
 
 	"github.com/chawadev/kalinga-backend/internal/api"
 	"github.com/chawadev/kalinga-backend/internal/auth"
+	"github.com/chawadev/kalinga-backend/internal/config"
 	"github.com/chawadev/kalinga-backend/internal/database"
+	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
 
 type JSONRPCRequest struct {
-	Jsonrpc string      `json:"jsonrpc"`
-	ID      interface{} `json:"id"`
-	Method  string      `json:"method"`
-	Params  struct {
-		Name      string                 `json:"name"`
-		Arguments map[string]interface{} `json:"arguments"`
-	} `json:"params"`
+	Jsonrpc string                 `json:"jsonrpc"`
+	ID      interface{}            `json:"id"`
+	Method  string                 `json:"method"`
+	Params  map[string]interface{} `json:"params"`
 }
 
 type JSONRPCResponse struct {
@@ -37,16 +36,55 @@ func (e *RPCError) Error() string {
 	return e.Message
 }
 
-func handleCheckStatus(args map[string]interface{}) interface{} {
+// MCP Initialize Request/Response structures
+type InitializeParams struct {
+	ProtocolVersion string                 `json:"protocolVersion"`
+	Capabilities    map[string]interface{} `json:"capabilities"`
+	ClientInfo      map[string]interface{} `json:"clientInfo"`
+}
+
+type InitializeResult struct {
+	ProtocolVersion string                 `json:"protocolVersion"`
+	Capabilities    map[string]interface{} `json:"capabilities"`
+	ServerInfo      map[string]interface{} `json:"serverInfo"`
+}
+
+// MCP Tools structures
+type Tool struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	InputSchema map[string]interface{} `json:"inputSchema"`
+}
+
+type ToolsListResult struct {
+	Tools []Tool `json:"tools"`
+}
+
+// MCP Tool Call structures
+type ToolCallParams struct {
+	Name      string                 `json:"name"`
+	Arguments map[string]interface{} `json:"arguments"`
+}
+
+type ToolCallResult struct {
+	Content []ContentItem `json:"content"`
+}
+
+type ContentItem struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+func handleCheckStatus(args map[string]interface{}) map[string]interface{} {
 	return map[string]interface{}{
 		"status":  "ok",
-		"service": "kalinga",
+		"service": "kalinga-mcp-backend",
 		"version": "0.1.0",
 		"health":  "healthy",
 	}
 }
 
-func handleConnectMomoAccount(args map[string]interface{}) interface{} {
+func handleConnectMomoAccount(args map[string]interface{}) map[string]interface{} {
 	phoneNumber, _ := args["phone_number"].(string)
 	provider, _ := args["provider"].(string)
 
@@ -59,25 +97,25 @@ func handleConnectMomoAccount(args map[string]interface{}) interface{} {
 	}
 }
 
-func handleBuildFinancialProfile(args map[string]interface{}) interface{} {
-	userID, _ := args["user_id"].(string)
+func handleBuildFinancialProfile(args map[string]interface{}) map[string]interface{} {
+	phoneNumber, _ := args["phone_number"].(string)
 
 	return map[string]interface{}{
-		"user_id":              userID,
-		"credit_score":         75,
-		"loan_readiness":       "high",
-		"income_regularity":    85,
-		"volatility":          12,
-		"repayment_capacity":   92,
-		"expense_to_income":    68,
-		"projected_savings":    "+$420/mo",
-		"financial_wellness":   78,
-		"risk_assessment":      "low",
-		"recommended_loan_amt": 5000,
+		"phone_number":          phoneNumber,
+		"credit_score":          75,
+		"loan_readiness":        "high",
+		"income_regularity":     85,
+		"volatility":           12,
+		"repayment_capacity":    92,
+		"expense_to_income":     68,
+		"projected_savings":     "+$420/mo",
+		"financial_wellness":    78,
+		"risk_assessment":       "low",
+		"recommended_loan_amt":  5000,
 	}
 }
 
-func handleVerifyClaim(args map[string]interface{}) interface{} {
+func handleVerifyClaim(args map[string]interface{}) map[string]interface{} {
 	claimID, _ := args["claim_id"].(string)
 	amount, _ := args["amount"].(float64)
 	merchant, _ := args["merchant"].(string)
@@ -105,11 +143,95 @@ func handleVerifyClaim(args map[string]interface{}) interface{} {
 	return result
 }
 
+func handleInitialize(params map[string]interface{}) InitializeResult {
+	return InitializeResult{
+		ProtocolVersion: "2025-11-25",
+		Capabilities: map[string]interface{}{
+			"tools": map[string]interface{}{
+				"listChanged": false,
+			},
+		},
+		ServerInfo: map[string]interface{}{
+			"name":    "kalinga-mcp-backend",
+			"version": "0.1.0",
+		},
+	}
+}
+
+func handleToolsList() ToolsListResult {
+	return ToolsListResult{
+		Tools: []Tool{
+			{
+				Name:        "check_status",
+				Description: "Verifies backend connection health and server status.",
+				InputSchema: map[string]interface{}{
+					"type":       "object",
+					"properties": map[string]interface{}{},
+					"required":   []interface{}{},
+				},
+			},
+			{
+				Name:        "connect_momo_account",
+				Description: "Connects a Mobile Money account using phone number and provider.",
+				InputSchema: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"phone_number": map[string]interface{}{
+							"type":        "string",
+							"description": "User's mobile number",
+						},
+						"provider": map[string]interface{}{
+							"type":        "string",
+							"description": "e.g., MTN, Airtel",
+						},
+					},
+					"required": []interface{}{"phone_number", "provider"},
+				},
+			},
+			{
+				Name:        "build_financial_profile",
+				Description: "Calculates credit readiness and financial metrics for a user.",
+				InputSchema: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"phone_number": map[string]interface{}{
+							"type":        "string",
+							"description": "User's phone number",
+						},
+					},
+					"required": []interface{}{"phone_number"},
+				},
+			},
+			{
+				Name:        "verify_claim",
+				Description: "Evaluates incoming refund or wrong-number transfer claims against fraud patterns.",
+				InputSchema: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"claim_id": map[string]interface{}{
+							"type":        "string",
+							"description": "Unique identifier for the claim",
+						},
+						"amount": map[string]interface{}{
+							"type":        "number",
+							"description": "Transaction amount",
+						},
+					},
+					"required": []interface{}{"claim_id", "amount"},
+				},
+			},
+		},
+	}
+}
+
 func main() {
 	// Load environment variables
 	if err := godotenv.Load(); err != nil {
 		log.Println("Warning: .env file not found, using environment variables")
 	}
+
+	// Load configuration
+	cfg := config.Load()
 
 	// Connect to database
 	if err := database.Connect(); err != nil {
@@ -126,27 +248,25 @@ func main() {
 	authRepo := auth.NewRepository(database.Database)
 	authService := auth.NewService(authRepo)
 
-	// Setup router
-	mux := http.NewServeMux()
-	router := api.NewRouter(authService)
-	router.SetupRoutes(mux)
+	// Setup Gin router
+	router := gin.Default()
+	apiRouter := api.NewRouter(authService)
+	apiRouter.SetupRoutes(router)
 
 	// MCP endpoint
-	mux.HandleFunc("/mcp", mcpHandler)
+	router.POST("/mcp", mcpHandler)
 
-	log.Println("Kalinga server listening on http://localhost:8080")
+	log.Printf("Kalinga server listening on http://localhost:%s", cfg.Port)
 
-	if err := http.ListenAndServe(":8080", mux); err != nil {
+	if err := router.Run(":" + cfg.Port); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func mcpHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
+func mcpHandler(c *gin.Context) {
 	var rpcReq JSONRPCRequest
-	if err := json.NewDecoder(r.Body).Decode(&rpcReq); err != nil {
-		json.NewEncoder(w).Encode(JSONRPCResponse{
+	if err := c.ShouldBindJSON(&rpcReq); err != nil {
+		c.JSON(http.StatusOK, JSONRPCResponse{
 			Jsonrpc: "2.0",
 			ID:      nil,
 			Error:   &RPCError{Code: -32700, Message: "Parse error"},
@@ -154,26 +274,35 @@ func mcpHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Handle tools/call method
-	if rpcReq.Method == "tools/call" {
-		var result interface{}
-		var err error
+	var result interface{}
+	var err error
 
-		switch rpcReq.Params.Name {
+	switch rpcReq.Method {
+	case "initialize":
+		result = handleInitialize(rpcReq.Params)
+	case "tools/list":
+		result = handleToolsList()
+	case "tools/call":
+		// Parse tool call parameters
+		name, _ := rpcReq.Params["name"].(string)
+		arguments, _ := rpcReq.Params["arguments"].(map[string]interface{})
+
+		var toolResult map[string]interface{}
+		switch name {
 		case "check_status":
-			result = handleCheckStatus(rpcReq.Params.Arguments)
+			toolResult = handleCheckStatus(arguments)
 		case "connect_momo_account":
-			result = handleConnectMomoAccount(rpcReq.Params.Arguments)
+			toolResult = handleConnectMomoAccount(arguments)
 		case "build_financial_profile":
-			result = handleBuildFinancialProfile(rpcReq.Params.Arguments)
+			toolResult = handleBuildFinancialProfile(arguments)
 		case "verify_claim":
-			result = handleVerifyClaim(rpcReq.Params.Arguments)
+			toolResult = handleVerifyClaim(arguments)
 		default:
-			err = &RPCError{Code: -32601, Message: "Method not found"}
+			err = &RPCError{Code: -32601, Message: "Tool not found"}
 		}
 
 		if err != nil {
-			json.NewEncoder(w).Encode(JSONRPCResponse{
+			c.JSON(http.StatusOK, JSONRPCResponse{
 				Jsonrpc: "2.0",
 				ID:      rpcReq.ID,
 				Error:   err.(*RPCError),
@@ -181,16 +310,32 @@ func mcpHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		json.NewEncoder(w).Encode(JSONRPCResponse{
-			Jsonrpc: "2.0",
-			ID:      rpcReq.ID,
-			Result:  result,
-		})
-	} else {
-		json.NewEncoder(w).Encode(JSONRPCResponse{
-			Jsonrpc: "2.0",
-			ID:      rpcReq.ID,
-			Error:   &RPCError{Code: -32601, Message: "Method not found"},
-		})
+		// Convert tool result to JSON string for MCP content format
+		resultJSON, _ := json.Marshal(toolResult)
+		result = ToolCallResult{
+			Content: []ContentItem{
+				{
+					Type: "text",
+					Text: string(resultJSON),
+				},
+			},
+		}
+	default:
+		err = &RPCError{Code: -32601, Message: "Method not found"}
 	}
+
+	if err != nil {
+		c.JSON(http.StatusOK, JSONRPCResponse{
+			Jsonrpc: "2.0",
+			ID:      rpcReq.ID,
+			Error:   err.(*RPCError),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, JSONRPCResponse{
+		Jsonrpc: "2.0",
+		ID:      rpcReq.ID,
+		Result:  result,
+	})
 }

@@ -3,32 +3,25 @@ package database
 import (
 	"context"
 	"log"
-	"os"
 	"time"
 
+	"github.com/chawadev/kalinga-backend/internal/config"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 var Client *mongo.Client
 var Database *mongo.Database
+var cfg *config.Config
 
 func Connect() error {
-	mongoURI := os.Getenv("MONGODB_URI")
-	if mongoURI == "" {
-		mongoURI = "mongodb://localhost:27017"
-	}
-
-	dbName := os.Getenv("DATABASE_NAME")
-	if dbName == "" {
-		dbName = "kalinga"
-	}
+	cfg = config.Load()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	var err error
-	Client, err = mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	Client, err = mongo.Connect(ctx, options.Client().ApplyURI(cfg.MongoURI))
 	if err != nil {
 		return err
 	}
@@ -38,7 +31,7 @@ func Connect() error {
 		return err
 	}
 
-	Database = Client.Database(dbName)
+	Database = Client.Database(cfg.DatabaseName)
 	log.Println("Connected to MongoDB")
 	return nil
 }
